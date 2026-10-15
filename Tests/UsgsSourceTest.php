@@ -166,6 +166,11 @@ final class UsgsSourceTest extends TestCase
             self::fail('not served');
         } catch (NotSupportedException) {
         }
+        try {
+            $this->source()->series(new SeriesQuery(['count'], Identifier::of(Scheme::GHCN, 'USW00094728')));
+            self::fail('a station');
+        } catch (NotSupportedException) {
+        }
         self::assertSame([], $this->calls);
     }
 

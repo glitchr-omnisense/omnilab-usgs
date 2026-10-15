@@ -109,6 +109,8 @@ final class UsgsSource extends HttpSource
      */
     public function series(SeriesQuery $query): array
     {
+        // A place's earthquakes, not a station's records.
+        $this->station($query);
         foreach ($query->variables as $variable) {
             if (!\array_key_exists($variable, self::VARIABLES)) {
                 throw NotSupportedException::operation('usgs', \sprintf('serve "%s" (it serves %s)', $variable, implode(', ', array_keys(self::VARIABLES))));
