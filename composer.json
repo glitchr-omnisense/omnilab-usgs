@@ -1,0 +1,46 @@
+{
+    "name": "omnilab/usgs",
+    "type": "library",
+    "description": "Omnilab USGS: an earthquake of the USGS catalogue (ComCat) by its event id - magnitude and type, place, depth, time, felt reports and intensities (DYFI, ShakeMap), tsunami flag, PAGER alert level, its ids in the other networks - and the earthquakes of a box or around a point over a period as series (count per step, each one's magnitude or depth, or the step's maximum, mean...) or as a list of entities with their time and place, through the FDSN event web service, no key needed.",
+    "keywords": [
+        "science",
+        "earth-sciences",
+        "seismology",
+        "earthquakes",
+        "usgs",
+        "fdsn",
+        "comcat",
+        "omnilab"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Marco Meyer",
+            "email": "marco.meyer@glitchr.io"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "glitchr/omnilab": "^1.0@dev",
+        "symfony/http-client": "^6.4|^7.0|^8.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Omnilab\\Usgs\\": ""
+        },
+        "exclude-from-classmap": [
+            "/Tests/"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Omnilab\\Usgs\\Tests\\": "Tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

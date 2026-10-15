@@ -1,0 +1,4 @@
+time,latitude,longitude,depth,mag,magType,nst,gap,dmin,rms,net,id,updated,place,type,horizontalError,depthError,magError,magNst,status,locationSource,magSource
+2026-10-01T12:27:11.864Z,35.7025,140.5507,41.649,5.3,mww,97,119,2.072,0.76,us,us6000tytg,2026-10-02T00:58:58.566Z,"0 km NNE of Yōkaichiba, Japan",earthquake,9,6.536,0.068,21,reviewed,us,us
+2026-10-01T21:01:41.707Z,36.0904,139.7487,65.032,4.5,mb,36,134,1.323,0.87,us,us6000tyxk,2026-10-03T15:41:01.152Z,"2 km NE of Satte, Japan",earthquake,3.5,7.627,0.118,21,reviewed,us,us
+2026-10-07T19:13:50.830Z,35.6751,140.3957,73.037,4.9,mww,105,109,1.971,0.57,us,us6000u0u7,2026-10-08T18:31:04.779Z,"3 km WSW of Shibayama, Japan",earthquake,8.82,5.361,0.08,15,reviewed,us,us
