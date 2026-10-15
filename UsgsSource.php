@@ -15,6 +15,8 @@ use Omnilab\Model\Scheme;
 use Omnilab\Model\Series;
 use Omnilab\Source\Capability;
 use Omnilab\Source\HttpSource;
+use Omnilab\Source\OccurrenceQuery;
+use Omnilab\Source\Page;
 use Omnilab\Source\SeriesQuery;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -25,11 +27,12 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  * reports and intensities, the tsunami flag, PAGER's alert level - and,
  * over a box or around a point for a period, the earthquakes as series
  * (their count per step; each one's magnitude or depth, or the step's
- * maximum, mean...) or as a list of entities, each with its time and its
- * place (events(), outside the contract).
+ * maximum, mean...) or as occurrences, each an entity with its time and
+ * its place, one page at a time (occurrences()).
  *
  * No key. One call per entity, per series query (every variable asked at
- * once), per list. The service answers at most 20,000 events a query.
+ * once), per page of occurrences. The service answers at most 20,000
+ * events a query (a page: as many).
  */
 final class UsgsSource extends HttpSource
 {
@@ -38,12 +41,21 @@ final class UsgsSource extends HttpSource
     /** The most events one query answers: more is a 400 from the service. */
     public const MAX_EVENTS = 20000;
 
+    /** Before the catalogue's first event: an open start (the service's default would be 30 days back). */
+    private const FIRST = '0001-01-01T00:00:00';
+
     /** The variables series() serves, with their unit. */
     public const VARIABLES = ['count' => null, 'magnitude' => null, 'depth' => 'km'];
 
+    /** How occurrences() sorts: the query's sort, the service's orderby. */
+    public const SORTS = [OccurrenceQuery::NEWEST => 'time', OccurrenceQuery::OLDEST => 'time-asc', 'magnitude' => 'magnitude', 'magnitude-asc' => 'magnitude-asc'];
+
+    /** PAGER's alert levels, the "alert" filter of occurrences(). */
+    public const ALERTS = ['green', 'yellow', 'orange', 'red'];
+
     /**
-     * @param float      $radius       the radius around a Point, in kilometres, for series() and events()
-     * @param float|null $minMagnitude the smallest magnitude series() and events() count (null: every event the catalogue has)
+     * @param float      $radius       the radius around a Point, in kilometres, for series() and for occurrences() when the query gives none
+     * @param float|null $minMagnitude the smallest magnitude series() and occurrences() count when the query says none (null: every event the catalogue has)
      */
     public function __construct(
         HttpClientInterface $http,
@@ -63,7 +75,7 @@ final class UsgsSource extends HttpSource
 
     public function capabilities(): array
     {
-        return [Capability::ENTITY, Capability::SERIES, Capability::HISTORICAL, Capability::AREA];
+        return [Capability::ENTITY, Capability::SERIES, Capability::OCCURRENCES, Capability::HISTORICAL, Capability::AREA];
     }
 
     /** An event by its ComCat id (us7000pn9s, an alias such as at00sttln4) or its event page. */
@@ -145,10 +157,56 @@ final class UsgsSource extends HttpSource
     }
 
     /**
-     * The earthquakes over the place for the period, as entities, each with
-     * its time and its place - what the catalogue's list gives, without an
-     * event's products (entity() reads those). Outside SourceInterface: the
-     * contract's search() takes a text, not a place and a period.
+     * The seismic events over the place for the period, each an entity with
+     * its time and its place, one page at a time - what the catalogue's list
+     * gives, without an event's products (entity() reads those: the
+     * uncertainties, the region, PAGER's review).
+     *
+     * A BBox is the box (across the antimeridian too); a Point, the circle
+     * of the query's radius around it (the configured one by default); no
+     * place, the world. A period's end left out is open: from the
+     * catalogue's first event, up to now; a date without a time is its whole
+     * day, in UTC. Filters: OccurrenceQuery::MIN_MAGNITUDE (the configured
+     * one by default), MAX_MAGNITUDE, KIND (the event type, or a list:
+     * "earthquake", "quarry blast", "explosion"...) and "alert" (PAGER's
+     * level, or a list: green, yellow, orange, red). Sorts: newest (the
+     * service's default), oldest, magnitude (the largest first),
+     * magnitude-asc. Up to 20,000 a page; no total (the count would cost a
+     * call more).
+     */
+    public function occurrences(OccurrenceQuery $query): Page
+    {
+        $filters = $this->filters($query, OccurrenceQuery::MIN_MAGNITUDE, OccurrenceQuery::MAX_MAGNITUDE, OccurrenceQuery::KIND, 'alert');
+        $orderBy = null === $query->sort ? null : (self::SORTS[$query->sort] ?? throw NotSupportedException::operation('usgs', \sprintf('sort occurrences by "%s" (it sorts by %s)', $query->sort, implode(', ', array_keys(self::SORTS)))));
+        foreach ([OccurrenceQuery::MIN_MAGNITUDE, OccurrenceQuery::MAX_MAGNITUDE] as $key) {
+            if (isset($filters[$key]) && !is_numeric($filters[$key])) {
+                throw new \InvalidArgumentException(\sprintf('The "%s" filter is a number, not "%s".', $key, get_debug_type($filters[$key])));
+            }
+        }
+        $alerts = array_map(static fn (mixed $a) => strtolower((string) $a), (array) ($filters['alert'] ?? []));
+        if (array_diff($alerts, self::ALERTS)) {
+            throw new \InvalidArgumentException(\sprintf('PAGER\'s alert levels are %s, not "%s".', implode(', ', self::ALERTS), implode('", "', array_diff($alerts, self::ALERTS))));
+        }
+        $utc = new \DateTimeZone('UTC');
+        $start = null === $query->from ? null : self::local($query->from, $utc);
+        $end = null === $query->to ? null : self::local($query->to, $utc);
+        if (null !== $end && '00:00:00' === $end->format('H:i:s')) {
+            $end = $end->modify('+1 day');
+        }
+
+        return $this->list($query->place, $start, $end, [
+            'maxmagnitude' => $filters[OccurrenceQuery::MAX_MAGNITUDE] ?? null,
+            'eventtype' => isset($filters[OccurrenceQuery::KIND]) ? implode(',', (array) $filters[OccurrenceQuery::KIND]) : null,
+            'alertlevel' => $alerts ? implode(',', $alerts) : null,
+        ], isset($filters[OccurrenceQuery::MIN_MAGNITUDE]) ? (float) $filters[OccurrenceQuery::MIN_MAGNITUDE] : null, $query->radius, $query->limit, max(1, (int) $query->cursor), $orderBy);
+    }
+
+    /**
+     * The earthquakes over the place for the period, as entities.
+     *
+     * @deprecated since omnilab/usgs 1.x: use occurrences(), the contract's
+     *             query by place and period - this answers its first page,
+     *             the period 30 days back from its end by default, as before
      *
      * @param int    $limit   the most events (the service's cap: 20,000)
      * @param string $orderBy "time" (newest first), "time-asc", "magnitude" (largest first), "magnitude-asc"
@@ -157,13 +215,40 @@ final class UsgsSource extends HttpSource
      */
     public function events(Point|BBox $place, ?\DateTimeInterface $from = null, ?\DateTimeInterface $to = null, ?float $minMagnitude = null, int $limit = 100, string $orderBy = 'time'): array
     {
-        [$from, $to] = self::period($from, $to, new \DateTimeZone('UTC'));
-        $data = $this->getJson('query', [
-            'format' => 'geojson', 'orderby' => $orderBy, 'starttime' => self::utc($from), 'endtime' => self::utc($to),
-            'limit' => max(1, min(self::MAX_EVENTS, $limit)),
-        ] + $this->where($place, $minMagnitude)) ?? [];
+        @trigger_error('UsgsSource::events() is deprecated since omnilab/usgs 1.x: use occurrences(new OccurrenceQuery($place, $from, $to, [OccurrenceQuery::MIN_MAGNITUDE => $minMagnitude], sort: ...)).', \E_USER_DEPRECATED);
+        if (!\in_array($orderBy, self::SORTS, true)) {
+            throw NotSupportedException::operation('usgs', \sprintf('order events by "%s" (time, time-asc, magnitude, magnitude-asc)', $orderBy));
+        }
+        [$start, $end] = self::period($from, $to, new \DateTimeZone('UTC'));
 
-        return array_map($this->toEntity(...), array_values(array_filter($data['features'] ?? [], 'is_array')));
+        return $this->list($place, $start, $end, [], $minMagnitude, null, $limit, 1, $orderBy)->items;
+    }
+
+    /**
+     * One page of the catalogue's list: one more event asked than the page
+     * holds, to know whether another follows.
+     *
+     * @param array<string, mixed> $parameters the service's own: maxmagnitude, eventtype, alertlevel
+     *
+     * @return Page<Entity>
+     */
+    private function list(Point|BBox|null $place, ?\DateTimeImmutable $start, ?\DateTimeImmutable $end, array $parameters, ?float $minMagnitude, ?float $radius, int $limit, int $offset, ?string $orderBy): Page
+    {
+        $limit = max(1, min(self::MAX_EVENTS, $limit));
+        $data = $this->getJson('query', [
+            'format' => 'geojson',
+            'orderby' => $orderBy,
+            // An open end: now, the service's default.
+            'starttime' => null === $start ? self::FIRST : self::utc($start),
+            'endtime' => null === $end ? null : self::utc($end),
+            'limit' => min(self::MAX_EVENTS, $limit + 1),
+            'offset' => $offset > 1 ? $offset : null,
+        ] + $parameters + $this->where($place, $minMagnitude, $radius)) ?? [];
+        $features = array_values(array_filter($data['features'] ?? [], 'is_array'));
+        $more = \count($features) > $limit || (self::MAX_EVENTS === $limit && \count($features) === $limit);
+        $entities = array_map($this->toEntity(...), \array_slice($features, 0, $limit));
+
+        return new Page($entities, $more ? (string) ($offset + $limit) : null);
     }
 
     /** @param array<string, mixed> $feature a GeoJSON feature, an event's detail or an item of a list */
@@ -226,16 +311,19 @@ final class UsgsSource extends HttpSource
     }
 
     /**
-     * The FDSN parameters of a place: a box, or a circle around a point.
+     * The FDSN parameters of a place: a box, or a circle around a point;
+     * none for the world.
      *
      * @return array<string, mixed>
      */
-    private function where(Point|BBox $place, ?float $minMagnitude = null): array
+    private function where(Point|BBox|null $place, ?float $minMagnitude = null, ?float $radius = null): array
     {
-        $where = $place instanceof BBox
+        $where = match (true) {
             // A box across the antimeridian: its east bound past 180, which the service reads.
-            ? ['minlatitude' => $place->south, 'maxlatitude' => $place->north, 'minlongitude' => $place->west, 'maxlongitude' => $place->west <= $place->east ? $place->east : $place->east + 360]
-            : ['latitude' => $place->latitude, 'longitude' => $place->longitude, 'maxradiuskm' => $this->radius];
+            $place instanceof BBox => ['minlatitude' => $place->south, 'maxlatitude' => $place->north, 'minlongitude' => $place->west, 'maxlongitude' => $place->west <= $place->east ? $place->east : $place->east + 360],
+            $place instanceof Point => ['latitude' => $place->latitude, 'longitude' => $place->longitude, 'maxradiuskm' => $radius ?? $this->radius],
+            default => [],
+        };
 
         return $where + ['minmagnitude' => $minMagnitude ?? $this->minMagnitude];
     }
@@ -288,14 +376,19 @@ final class UsgsSource extends HttpSource
      */
     private static function period(?\DateTimeInterface $from, ?\DateTimeInterface $to, \DateTimeZone $timezone): array
     {
-        $local = static fn (\DateTimeInterface $d): \DateTimeImmutable => new \DateTimeImmutable($d->format('Y-m-d H:i:s.u'), $timezone);
-        $end = null === $to ? new \DateTimeImmutable('now', $timezone) : $local($to);
+        $end = null === $to ? new \DateTimeImmutable('now', $timezone) : self::local($to, $timezone);
         if (null !== $to && '00:00:00' === $end->format('H:i:s')) {
             $end = $end->modify('+1 day');
         }
-        $start = null === $from ? $end->modify('-30 days') : $local($from);
+        $start = null === $from ? $end->modify('-30 days') : self::local($from, $timezone);
 
         return [$start, $end];
+    }
+
+    /** A time as written, read in a zone: a date and its time of day, the zone it was given in left aside. */
+    private static function local(\DateTimeInterface $time, \DateTimeZone $timezone): \DateTimeImmutable
+    {
+        return new \DateTimeImmutable($time->format('Y-m-d H:i:s.u'), $timezone);
     }
 
     private static function utc(\DateTimeImmutable $time): string

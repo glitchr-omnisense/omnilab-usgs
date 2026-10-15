@@ -1,7 +1,7 @@
 {
     "name": "omnilab/usgs",
     "type": "library",
-    "description": "Omnilab USGS: an earthquake of the USGS catalogue (ComCat) by its event id - magnitude and type, place, depth, time, felt reports and intensities (DYFI, ShakeMap), tsunami flag, PAGER alert level, its ids in the other networks - and the earthquakes of a box or around a point over a period as series (count per step, each one's magnitude or depth, or the step's maximum, mean...) or as a list of entities with their time and place, through the FDSN event web service, no key needed.",
+    "description": "Omnilab USGS: an earthquake of the USGS catalogue (ComCat) by its event id - magnitude and type, place, depth, time, felt reports and intensities (DYFI, ShakeMap), tsunami flag, PAGER alert level, its ids in the other networks - and the earthquakes of a box or around a point over a period as series (count per step, each one's magnitude or depth, or the step's maximum, mean...) or as occurrences, entities with their time and place a page at a time, through the FDSN event web service, no key needed.",
     "keywords": [
         "science",
         "earth-sciences",

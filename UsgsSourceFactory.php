@@ -9,12 +9,12 @@ use Symfony\Component\HttpClient\HttpClient;
 
 /**
  * The USGS earthquake catalogue: an event by its id, and the earthquakes
- * of a place and a period as series or as a list - no key needed.
+ * of a place and a period as series or as occurrences - no key needed.
  *
  *   options:
  *     mailto: 'support@glitchr.io'     # in the User-Agent
- *     radius_km: 100                   # the circle around a Point, for series() and events()
- *     min_magnitude: null              # the smallest magnitude counted (null: every event, down to the microquakes some networks report)
+ *     radius_km: 100                   # the circle around a Point, for series(), and for occurrences() when a query gives none
+ *     min_magnitude: null              # the smallest magnitude counted when a query says none (null: every event, down to the microquakes some networks report)
  *     throttle: 0                      # seconds between two calls: the USGS publishes no figure
  *     base_uri: 'https://earthquake.usgs.gov/fdsnws/event/1/'
  */
