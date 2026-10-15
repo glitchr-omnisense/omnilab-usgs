@@ -80,10 +80,24 @@ uncertainties, `region`, `pager_review`, `horizontal_error`).
 
 ## The Collector
 
-No path yet. Wikidata keeps the USGS event id in P3196 (1,511 items on 2026-10-15; the 2025
-Myanmar earthquake, Q133574091, has `us7000pn9s`), but omnilab/wikidata does not read P3196 into
-the `usgs.event` scheme: until it does, the Collector cannot follow an earthquake from Wikidata
-here. The USGS gives no Wikidata item.
+Wikidata keeps the USGS event id in P3196 (1,511 items on 2026-10-15), which omnilab/wikidata
+reads into the `usgs.event` scheme: the Collector follows an earthquake from Wikidata here, and
+back. Answered on 2026-10-15, the 2025 Myanmar earthquake:
+
+```php
+$collector = new Collector($registry, new Merger(['time' => ['usgs'], 'place' => ['usgs']]));
+$quake = $collector->collect('wikidata', 'Q133574091', 1, ['usgs']);
+$quake->sources;                      // ['wikidata', 'usgs']
+$quake->time;                         // 2025-03-28 06:20:52 UTC [usgs] (Wikidata gives the day)
+$quake->property('magnitude');        // 7.7 ± 0.028 [usgs]; moment_magnitude 7.7 [wikidata]
+```
+
+3 calls in about 2 s - Wikidata's item and the label of its class, then
+`query?format=geojson&eventid=us7000pn9s`. From the USGS (`collect('usgs', 'us7000pn9s', 1,
+['wikidata'])`), 4: the event, then `haswbstatement:P3196=us7000pn9s`, the item, its class. For
+the great historical earthquakes Wikidata gives the id of a catalogue the USGS keeps
+(`official20110311054624120_30`, Tohoku 2011), which the source reads and the USGS answers. The
+USGS gives no Wikidata item.
 
 ## What the catalogue does not give here
 
@@ -95,7 +109,9 @@ catalogue and contributor filters, and the real-time feeds are not read.
 ## Verified, and not
 
 Against the real service on 2026-10-15: the 2025 Mandalay earthquake by its id and by its event
-page, the 2025 Kamchatka earthquake (tsunami flag set); an unknown id (404); the M4+ earthquakes
+page, the 2025 Kamchatka earthquake (tsunami flag set); the 2011 Tohoku earthquake by
+`official20110311054624120_30` (M 9.1 mww, its other ids `usc0001xgp`, `usp000hvnu`,
+`iscgem16461282`...); an unknown id (404); the M4+ earthquakes
 over Europe from 2026-10-01 to 10-07 as a daily count (1, 1, 0, 7, 1, 1, 0), each one's magnitude
 (eleven) and the five largest as entities (a M 5.0 near Feke, Turkey, first); every earthquake
 within 100 km of Tokyo the same week as daily maxima (M 5.3 on the 1st, 4.9 on the 7th); an

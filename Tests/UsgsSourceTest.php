@@ -107,6 +107,13 @@ final class UsgsSourceTest extends TestCase
         self::assertNull($this->source()->entity('us0000nonexist'));
     }
 
+    public function testTheLongIdOfACatalogueTheUsgsKeepsIsAsked(): void
+    {
+        // As Wikidata's P3196 gives Tohoku 2011: the service is asked, not refused by the scheme.
+        $this->source()->entity('official20110311054624120_30');
+        self::assertSame('official20110311054624120_30', $this->calls[0]['eventid'] ?? null);
+    }
+
     public function testAnIdentifierOfAnotherBaseIsRefusedBeforeAnyCall(): void
     {
         foreach ([Identifier::wikidata('Q131536000'), 'Q131536000', Identifier::of(Scheme::SIMBAD, 'M 31'), '58-08-2', 'not an id!'] as $id) {
