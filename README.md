@@ -1,6 +1,6 @@
 # omnilab/usgs
 
-The USGS earthquake catalogue (ComCat) for [omniscient/omnilab](https://github.com/glitchr-studio/omnilab):
+The USGS earthquake catalogue (ComCat) for [omnisense/omnilab](https://github.com/glitchr-omnisense/omnilab):
 an event by its id - its magnitude and type, its place and depth, its time, the felt reports and
 intensities, the tsunami flag, PAGER's alert level, its ids in the other networks - and the
 earthquakes of a box or around a point over a period, as series (their count per day or hour;
