@@ -1,5 +1,10 @@
 # omnilab/usgs
 
+The USGS earthquake catalogue (ComCat), through its FDSN event web service
+(`https://earthquake.usgs.gov/fdsnws/event/1/`), for [omnisense/omnilab](https://github.com/glitchr-omnisense/omnilab):
+an earthquake by its id - time, place, magnitude, depth, PAGER alert, tsunami flag - as an entity;
+the earthquakes of a box or around a point as series or as occurrences. No key.
+
 ## Installation
 
 ```sh
@@ -18,6 +23,52 @@ $usgs = (new UsgsSourceFactory($httpClient))->create([
 
 With the Symfony bundle, the factory is registered as `usgs` when the bundle knows it; otherwise
 register `UsgsSourceFactory` as a service (it is autoconfigured as a `SourceFactoryInterface`).
+
+## Credentials
+
+None: the USGS's FDSN event service is free and takes no key. Heavy pollers are pointed to its
+real-time GeoJSON feeds.
+
+## Options
+
+The factory's options, with the defaults it applies (`UsgsSourceFactory`):
+
+| Option | Type | Default | Required | Effect |
+|---|---|---|---|---|
+| `radius_km` | `float` | `100` | no | the circle around a `Point`, in kilometres, for `series()`, and for `occurrences()` when the query gives no radius |
+| `min_magnitude` | `?float` | null | no | the smallest magnitude counted when a query says none; null: every event, down to the microquakes some networks report |
+| `mailto` | `?string` | null | no | a contact address, sent in the User-Agent |
+| `user_agent` | `?string` | null | no | the whole User-Agent, in place of the one made from `mailto` |
+| `throttle` | `float` | `0` | no | seconds left between two calls: the USGS publishes no figure |
+| `base_uri` | `string` | `https://earthquake.usgs.gov/fdsnws/event/1/` | no | the API the source calls |
+
+Per call, `occurrences()` reads the filters `OccurrenceQuery::MIN_MAGNITUDE`, `MAX_MAGNITUDE`,
+`KIND` and `alert`; any other key is refused before any call ([Calls](#calls)).
+
+## Capabilities
+
+`capabilities()` answers `entity`, `series`, `occurrences`, `historical`, `area`; an operation it does not answer throws `NotSupportedException` before any call.
+
+| Capability | Supported | |
+|---|---|---|
+| `entity` | yes | an event id (`us7000pn9s`), another network's id for it (the preferred event answers), `usgs.event:`, its event page; another scheme refused before any call; one call |
+| `search` | no | the catalogue has no text search |
+| `series` | yes | `count`, `magnitude`, `depth` over a box or around a point, by any step; one call for every variable; 20,000 events at most (the service's 400 beyond) |
+| `products` | no |  |
+| `occurrences` | yes | the earthquakes (and other event types) of a box, a circle or the world, sorted newest, oldest, by magnitude; 20,000 a page at most, paged by offset; no total |
+| `datasets` | no |  |
+| `jobs` | no |  |
+| `open` | no |  |
+| `structure` | no |  |
+| `cross_references` | no | the event's ids in the other networks (all `usgs.event`); Wikidata carries the USGS id (P3196) |
+| `forecast` | no |  |
+| `historical` | yes | the catalogue from 1568 |
+| `area` | yes | a `BBox` (across the antimeridian too) |
+| `station` | no |  |
+| `cloud_cover` | no |  |
+
+Outside the contract, deprecated: `events(Point|BBox $place, ...)`, the list `occurrences()`
+replaced, still answered as its first page.
 
 ## Which API
 
@@ -124,6 +175,61 @@ estimates of fatalities and losses (only the alert level is read), the aftershoc
 other event types in the series (`eventtype=earthquake`), the depth and magnitude ranges, the
 catalogue and contributor filters, and the real-time feeds are not read.
 
+## Example
+
+```php
+<?php
+
+require __DIR__.'/vendor/autoload.php';
+
+use Omnilab\Model\Point;
+use Omnilab\Model\Series;
+use Omnilab\Source\OccurrenceQuery;
+use Omnilab\Source\SeriesQuery;
+use Omnilab\Usgs\UsgsSourceFactory;
+use Symfony\Component\HttpClient\HttpClient;
+
+$usgs = (new UsgsSourceFactory(HttpClient::create()))->create(['mailto' => 'you@example.org']);
+
+$tohoku = $usgs->entity('official20110311054624120_30');
+echo $tohoku->label, ' (', $tohoku->id, '): ', $tohoku->time->format('Y-m-d H:i:s'), ' UTC, ', $tohoku->value('magnitude'), ' ', $tohoku->value('magnitude_type'), ', ', $tohoku->property('depth'), "\n";
+
+$quakes = $usgs->occurrences(new OccurrenceQuery(null, new DateTimeImmutable('2026-10-19'), new DateTimeImmutable('2026-10-25'), [OccurrenceQuery::MIN_MAGNITUDE => 6], limit: 3, sort: 'magnitude'));
+foreach ($quakes as $quake) {
+    echo '  ', $quake->time->format('Y-m-d H:i'), ' UTC  ', $quake->label, '  ', $quake->place, "\n";
+}
+
+[$count] = $usgs->series(new SeriesQuery(['count'], new Point(35.6812, 139.7671), new DateTimeImmutable('2026-10-19'), new DateTimeImmutable('2026-10-25'), SeriesQuery::DAILY));
+echo 'earthquakes a day within 100 km of Tokyo: ', implode(', ', $count->values()), "\n";
+```
+
+```
+M 9.1 - 2011 Great Tohoku Earthquake, Japan (usgs.event:official20110311054624120_30): 2011-03-11 05:46:24 UTC, 9.1 mww, 29 km
+  2026-10-22 14:33 UTC  M 7.0 - 191 km ENE of Nagqu, China  32.3805,93.7797
+  2026-10-24 02:31 UTC  M 6.9 - 197 km WNW of Port-Olry, Vanuatu  -14.0558,165.5455
+  2026-10-20 04:20 UTC  M 6.6 - 195 km NW of Port-Olry, Vanuatu  -13.869,165.713
+earthquakes a day within 100 km of Tokyo: 0, 0, 1, 0, 0, 0, 0
+```
+
+(as answered on 2026-10-27: three calls - the event, the world's M6+ of the week, the count around Tokyo)
+
+```yaml
+# config/packages/omnilab.yaml
+omnilab:
+    sources:
+        usgs: { factory: usgs, options: { mailto: '%env(OMNILAB_MAILTO)%', radius_km: 100 } }
+```
+
+## Errors
+
+Every call goes through `HttpSource`: a 404 or a 410 (and a 204) is null - an empty page for a list -; a 429 is a `RateLimitedException` (`retryAfter` from `Retry-After`); a 5xx, a time-out or a host that does not answer an `UnavailableException`; any other 4xx a `ProviderException` with its `status` and what the service said; an answer that is not JSON a `ProviderException`, a web page answered for JSON an `UnavailableException`.
+
+The USGS's own: an unknown id is its 404, null; more than 20,000 events in a series its 400, a
+`ProviderException` that says so. Before any call (`NotSupportedException`): an identifier of
+another scheme, a variable not served, an aggregation it does not make, a station, a filter or a
+sort not read; a magnitude filter that is not a number, an alert level that is not PAGER's
+(`\InvalidArgumentException`).
+
 ## Verified, and not
 
 Against the real service on 2026-10-15: the 2025 Mandalay earthquake by its id and by its event
@@ -142,5 +248,17 @@ event; a box across the antimeridian (170° to -170°, 25° S to 10° S, M5+ fro
 (`limit` and `offset`, the 400 only without a limit); `count` answering `maxAllowed` 20000. The
 fixtures in `Tests/Fixtures/` are its answers, the events' products cut to the two read.
 
+Again on 2026-10-27: the Tohoku earthquake by its id, the world's M6+ earthquakes of 19 to 25
+October (the largest first), the daily count within 100 km of Tokyo (the example above).
+
 Not verified: a query over 20,000 events (the 400 is the documented one); the service's answer to a client that
 calls too fast (no 429 met, no rate published).
+
+## Responsibility
+
+This package is an independent, unofficial client: it is not affiliated with, endorsed by or
+sponsored by the U.S. Geological Survey. Its earthquake data are in the U.S. public domain; credit
+the USGS where they are shown, and use its real-time feeds rather than polling the service, as the
+README's [Terms of use](https://github.com/glitchr-omnisense/omnilab-usgs#terms-of-use) says.
+Whoever runs the package is responsible for any use made of what it returns: see the README's
+[Responsibility](https://github.com/glitchr-omnisense/omnilab-usgs#responsibility) section.
