@@ -1,0 +1,40 @@
+{
+    "$schema": "https://github.com/glitchr-omnisense/contracts/blob/1.x/resources/usage-policy.schema.json",
+    "provider": "usgs",
+    "rateLimits": null,
+    "concurrency": null,
+    "rights": {
+        "commercial": "allowed",
+        "openSourceRequired": null,
+        "caching": {
+            "permission": "allowed",
+            "maxTtl": null
+        },
+        "storage": "allowed",
+        "redistribution": "allowed",
+        "attribution": {
+            "required": false,
+            "text": "Credit: U.S. Geological Survey",
+            "url": "https://earthquake.usgs.gov/",
+            "where": [
+                "source"
+            ]
+        },
+        "licence": "US public domain (17 U.S.C. 105)"
+    },
+    "requirements": {
+        "key": false,
+        "userAgent": {
+            "required": false,
+            "pattern": null
+        }
+    },
+    "provenance": {
+        "terms": "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+        "policy": "https://earthquake.usgs.gov/fdsnws/event/1/",
+        "verifiedAt": "2026-11-10",
+        "declaredBy": "maintainer",
+        "contact": "gs-haz_dev_team_group@usgs.gov",
+        "notes": "FDSN event service page read 2026-11-10: no rate limit stated; queries limited to 20,000 events (HTTP 400 beyond); time/area search limits 'being evaluated and not enforced yet'; automated applications should use the real-time GeoJSON feeds whenever possible. Responses send Cache-Control: public, max-age=60 (checked). USGS-authored data are in the U.S. public domain; the USGS asks for a citation such as 'Credit: U.S. Geological Survey' (a request). Contributed network data and the USGS identifier are outside that."
+    }
+}
