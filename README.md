@@ -38,6 +38,34 @@ omnilab:
                 min_magnitude: 4               # the smallest magnitude series() and occurrences() count, when a query says none; null: all
 ```
 
+## Install and a first call
+
+```sh
+composer require omnilab/usgs
+```
+
+A real call, with no account and no key: the 2025 Mandalay earthquake in the USGS catalogue.
+`mailto` is your address, sent in the User-Agent so that the service can reach you before it blocks
+a caller; the source keeps to the limits its [`policy.json`](policy.json) declares.
+
+```php
+<?php
+
+require __DIR__.'/vendor/autoload.php';
+
+use Omnilab\Usgs\UsgsSourceFactory;
+
+$usgs = (new UsgsSourceFactory())->create(['mailto' => 'you@example.org']);   // your address, in the User-Agent
+$quake = $usgs->entity('us7000pn9s');
+echo $quake->label, ', ', $quake->time->format(DATE_ATOM), "\n";
+```
+
+Its output on 2026-11-13:
+
+```
+M 7.7 - 2025 Mandalay, Burma (Myanmar) Earthquake, 2025-03-28T06:20:52+00:00
+```
+
 ## Terms of use
 
 The USGS's earthquake data are in the U.S. public domain; credit the USGS where you show them.
